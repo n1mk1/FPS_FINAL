@@ -1,0 +1,471 @@
+#include <GL/freeglut.h>
+#include <SOIL.h> // Include SOIL for texture loading
+#include <cmath>
+#include <unordered_set>
+#include <vector>
+#include <algorithm>
+#define M_PI 3.14
+
+// Structs and Global Variables
+struct Bullet {
+    float x, y, z;
+    float dirX, dirY, dirZ;
+};
+
+struct Sphere {
+    float x, y, z;
+};
+
+// Camera position
+float cameraX = 0.0f, cameraY = 5.0f, cameraZ = 10.0f;
+float cameraAngleH = 0.0f; // Horizontal angle
+float cameraAngleV = 0.0f; // Vertical angle (for yaw)
+
+// Jumping mechanics
+bool isJumping = false;
+float jumpVelocity = 0.2f; // Vertical velocity
+const float gravity = -0.003f; // Gravity effect
+const float jumpStrength = 0.3f; // Initial jump velocity
+const float groundLevel = 5.0f; // Default ground level
+
+// Mouse sensitivity
+const float sensitivity = 0.001f;
+
+// Plane dimensions
+const int planeSize = 50;
+
+// Key state tracking
+std::unordered_set<unsigned char> activeKeys;
+
+// Texture IDs
+GLuint planeTexture;
+GLuint wallTexture;
+GLuint uiTexture;
+
+// Bullet container
+std::vector<Bullet> bullets;
+
+// Sphere container
+std::vector<Sphere> spheres;
+
+// Function Declarations
+GLuint loadTexture(const char* fileName);
+void drawPlane();
+void drawWalls();
+void drawBullets();
+void drawCannon();
+void drawUIOverlay();
+void drawSpheres();
+void setCamera();
+void display();
+void handleMovement();
+void fireBullet();
+void spawnSphere();
+void checkCollisions();
+void keyboard(unsigned char key, int x, int y);
+void keyboardUp(unsigned char key, int x, int y);
+void mouseClick(int button, int state, int x, int y);
+void mouseMotion(int x, int y);
+void reshape(int w, int h);
+
+// Function Definitions
+
+// Function to load a texture
+GLuint loadTexture(const char* fileName) {
+    GLuint tex;
+    tex = SOIL_load_OGL_texture(
+        fileName,
+        SOIL_LOAD_AUTO,
+        SOIL_CREATE_NEW_ID,
+        SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y | SOIL_FLAG_TEXTURE_REPEATS
+    );
+
+    if (!tex) {
+        printf("SOIL loading error: '%s'\n", SOIL_last_result());
+    }
+
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    return tex;
+}
+
+// Function to draw a textured plane
+void drawPlane() {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, planeTexture);
+
+    glColor3f(1.0f, 1.0f, 1.0f); // White to show texture colors
+    glBegin(GL_QUADS);
+
+    // Draw a single large quad for the plane with the texture mapped across it
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-planeSize, 0.0f, -planeSize);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(planeSize, 0.0f, -planeSize);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(planeSize, 0.0f, planeSize);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-planeSize, 0.0f, planeSize);
+
+    glEnd();
+
+    glDisable(GL_TEXTURE_2D);
+}
+
+// Function to draw textured walls
+void drawWalls() {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, wallTexture);
+
+    glColor3f(1.0f, 1.0f, 1.0f); // White to show texture colors
+    glBegin(GL_QUADS);
+
+    // Front wall
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-planeSize, 0.0f, -planeSize);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(planeSize, 0.0f, -planeSize);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(planeSize, planeSize, -planeSize);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-planeSize, planeSize, -planeSize);
+
+    // Back wall
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-planeSize, 0.0f, planeSize);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(planeSize, 0.0f, planeSize);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(planeSize, planeSize, planeSize);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-planeSize, planeSize, planeSize);
+
+    // Left wall
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-planeSize, 0.0f, -planeSize);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-planeSize, 0.0f, planeSize);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(-planeSize, planeSize, planeSize);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-planeSize, planeSize, -planeSize);
+
+    // Right wall
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(planeSize, 0.0f, -planeSize);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(planeSize, 0.0f, planeSize);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(planeSize, planeSize, planeSize);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(planeSize, planeSize, -planeSize);
+
+    glEnd();
+
+    glDisable(GL_TEXTURE_2D);
+}
+
+// Function to draw bullets
+void drawBullets() {
+    glColor3f(1.0f, 1.0f, 0.0f); // Yellow color for bullets
+    for (const Bullet& bullet : bullets) {
+        glPushMatrix();
+        glTranslatef(bullet.x, bullet.y + 0.1f, bullet.z);
+        glutSolidSphere(0.05f, 16, 16); // Draw bullet as a small sphere
+        glPopMatrix();
+    }
+}
+
+// Function to draw spheres
+void drawSpheres() {
+    glColor3f(1.0f, 0.0f, 0.0f); // Red color for spheres
+    for (const Sphere& sphere : spheres) {
+        glPushMatrix();
+        glTranslatef(sphere.x, sphere.y, sphere.z);
+        glutSolidSphere(0.3f, 32, 32); // Draw sphere
+        glPopMatrix();
+    }
+}
+
+// Function to draw a designed cannon under the camera
+void drawCannon() {
+    glPushMatrix();
+
+    // Position the cannon to look like a designed muzzle in front of the camera
+    glTranslatef(cameraX, cameraY - 0.5f, cameraZ);
+    glRotatef(-cameraAngleH * 180.0f / M_PI, 0.0f, 1.0f, 0.0f);
+    glRotatef(cameraAngleV * 180.0f / M_PI, 1.0f, 0.0f, 0.0f);
+    glTranslatef(0.0f, 1.0f, -2.0f);
+
+    // Draw base of the cannon
+    GLUquadric* quadric = gluNewQuadric();
+    glColor3f(0.4f, 0.4f, 0.9f); // Dark grey color
+    gluCylinder(quadric, 0.1f, 0.1f, 1.0f, 32, 32);
+
+    // Draw the cannon barrel
+    glTranslatef(0.0f, 0.0f, -2.0f);
+    glColor3f(0.6f, 0.6f, 0.6f); // Light grey color
+    gluCylinder(quadric, 0.05f, 0.05f, 1.5f, 32, 32);
+
+    gluDeleteQuadric(quadric);
+    glPopMatrix();
+}
+
+// Function to draw the UI overlay (crosshair)
+void drawUIOverlay() {
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, 1920, 0, 1080); // Set orthographic projection matching window size
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, uiTexture);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Enable transparency handling
+
+    glColor3f(1.0f, 1.0f, 1.0f); // Set color to white to display texture properly
+
+    glBegin(GL_QUADS);
+    // Coordinates are specified to place the UI at the desired location (center of the screen)
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(910.0f, 545.0f);    // Bottom-left corner
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(1010.0f, 545.0f);   // Bottom-right corner
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(1010.0f, 645.0f);   // Top-right corner
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(910.0f, 645.0f);    // Top-left corner
+    glEnd();
+
+    glDisable(GL_BLEND);
+    glDisable(GL_TEXTURE_2D);
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+}
+
+// Function to set the camera
+void setCamera() {
+    float dirX = sin(cameraAngleH) * cos(cameraAngleV);
+    float dirY = sin(cameraAngleV);
+    float dirZ = -cos(cameraAngleH) * cos(cameraAngleV);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    gluLookAt(cameraX, cameraY, cameraZ, cameraX + dirX, cameraY + dirY, cameraZ + dirZ, 0.0f, 1.0f, 0.0f);
+}
+
+// Display callback
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    setCamera();
+
+    drawPlane();
+    drawWalls();
+    drawCannon();
+    drawBullets();
+    drawSpheres();
+
+    // Render the 2D UI Overlay
+    drawUIOverlay();
+
+    glutSwapBuffers();
+}
+
+// Function to handle continuous movement
+void handleMovement() {
+    const float baseSpeed = 0.15f;
+    float speed = baseSpeed;
+
+    // Check if shift key is pressed to double the speed
+    if (activeKeys.count('c')) {
+        speed *= 2.0f;
+    }
+
+    float dirX = sin(cameraAngleH) * cos(cameraAngleV);
+    float dirZ = -cos(cameraAngleH) * cos(cameraAngleV);
+
+    if (activeKeys.count('w')) { // Move forward
+        cameraX += dirX * speed;
+        cameraZ += dirZ * speed;
+    }
+    if (activeKeys.count('s')) { // Move backward
+        cameraX -= dirX * speed;
+        cameraZ -= dirZ * speed;
+    }
+    if (activeKeys.count('a')) { // Strafe left
+        cameraX -= cos(cameraAngleH) * speed;
+        cameraZ -= sin(cameraAngleH) * speed;
+    }
+    if (activeKeys.count('d')) { // Strafe right
+        cameraX += cos(cameraAngleH) * speed;
+        cameraZ += sin(cameraAngleH) * speed;
+    }
+
+    // Restrict camera movement to stay within walls
+    if (cameraX < -planeSize + 2.0f) cameraX = -planeSize + 2.0f;
+    if (cameraX > planeSize - 2.0f) cameraX = planeSize - 2.0f;
+    if (cameraZ < -planeSize + 2.0f) cameraZ = -planeSize + 2.0f;
+    if (cameraZ > planeSize - 2.0f) cameraZ = planeSize - 2.0f;
+
+    // Jump mechanics
+    if (isJumping) {
+        cameraY += jumpVelocity;
+        jumpVelocity += gravity;
+
+        if (cameraY <= groundLevel) { // Land back on the ground
+            cameraY = groundLevel;
+            isJumping = false;
+            jumpVelocity = 0.0f;
+        }
+    }
+
+    // Update bullet positions
+    for (Bullet& bullet : bullets) {
+        bullet.x += bullet.dirX * 0.5f;
+        bullet.y += bullet.dirY * 0.5f;
+        bullet.z += bullet.dirZ * 0.5f;
+    }
+
+    // Update sphere positions to move towards the camera
+    for (Sphere& sphere : spheres) {
+        float dirX = cameraX - sphere.x;
+        float dirY = cameraY - sphere.y;
+        float dirZ = cameraZ - sphere.z;
+        float length = sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+
+        dirX /= length;
+        dirY /= length;
+        dirZ /= length;
+
+        sphere.x += dirX * 0.05f;
+        sphere.y += dirY * 0.05f;
+        sphere.z += dirZ * 0.05f;
+    }
+
+    // Check for bullet-sphere collisions
+    checkCollisions();
+
+    glutPostRedisplay();
+}
+
+// Function to fire a bullet
+void fireBullet() {
+    float dirX = sin(cameraAngleH) * cos(cameraAngleV);
+    float dirY = sin(cameraAngleV);
+    float dirZ = -cos(cameraAngleH) * cos(cameraAngleV);
+
+    Bullet bullet = { cameraX, cameraY, cameraZ, dirX, dirY, dirZ };
+    bullets.push_back(bullet);
+}
+
+// Function to spawn a sphere
+void spawnSphere() {
+    Sphere sphere = { (float)(rand() % (2 * planeSize) - planeSize), 5.0f, (float)(rand() % (2 * planeSize) - planeSize) };
+    spheres.push_back(sphere);
+}
+
+// Function to check collisions between bullets and spheres
+void checkCollisions() {
+    bullets.erase(std::remove_if(bullets.begin(), bullets.end(), [](const Bullet& bullet) {
+        auto it = std::find_if(spheres.begin(), spheres.end(), [&bullet](const Sphere& sphere) {
+            float distance = sqrt(pow(bullet.x - sphere.x, 2) + pow(bullet.y - sphere.y, 2) + pow(bullet.z - sphere.z, 2));
+            return distance < 0.35f; // Collision threshold
+            });
+        if (it != spheres.end()) {
+            spheres.erase(it);
+            return true; // Remove bullet
+        }
+        return false;
+        }), bullets.end());
+}
+
+// Key press callback
+void keyboard(unsigned char key, int x, int y) {
+    activeKeys.insert(key);
+
+    if (key == ' ' && !isJumping) { // Jump on space key if not already jumping
+        isJumping = true;
+        jumpVelocity = jumpStrength;
+    }
+    if (key == 'f') { // Fire bullet when 'f' key is pressed
+        fireBullet();
+    }
+    if (key == 'g') { // Spawn sphere when 'g' key is pressed
+        spawnSphere();
+    }
+}
+
+// Key release callback
+void keyboardUp(unsigned char key, int x, int y) {
+    activeKeys.erase(key);
+}
+
+// Mouse click callback
+void mouseClick(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        fireBullet();
+    }
+}
+
+// Mouse movement callback with infinite movement support
+void mouseMotion(int x, int y) {
+    static const int centerX = 400; // Center X position (half of window width)
+    static const int centerY = 300; // Center Y position (half of window height)
+    static bool justWarped = false;
+
+    // Ignore the mouse event triggered by the warp itself
+    if (justWarped) {
+        justWarped = false;
+        return;
+    }
+
+    // Calculate delta movement
+    int dx = x - centerX;
+    int dy = y - centerY;
+
+    // Update camera angles based on delta movement
+    cameraAngleH += dx * sensitivity;
+    cameraAngleV -= dy * sensitivity;
+
+    // Clamp the vertical angle to -90 to +90 degrees
+    if (cameraAngleV > 1.57f) // ~90 degrees in radians
+        cameraAngleV = 1.57f;
+    if (cameraAngleV < -1.57f)
+        cameraAngleV = -1.57f;
+
+    // Warp the mouse back to the center of the screen
+    glutWarpPointer(centerX, centerY);
+    justWarped = true;
+
+    glutPostRedisplay();
+}
+
+// Reshape callback
+void reshape(int w, int h) {
+    glViewport(0, 0, w, h);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(45.0, (double)w / (double)h, 1.0, 100.0);
+}
+
+// Update in the main function
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitWindowSize(1920, 1080);
+    glutInitWindowPosition(0, 0);
+    glutCreateWindow("Walkable Flat Plane with Texture, Jump, and Spheres");
+
+    glEnable(GL_DEPTH_TEST);
+
+    // Load textures
+    planeTexture = loadTexture("land.jpg");
+    wallTexture = loadTexture("wall.jpg");
+    uiTexture = loadTexture("crosshair.png");
+
+    // Center the cursor at the beginning
+    glutWarpPointer(400, 300);
+    glutSetCursor(GLUT_CURSOR_NONE); // Hide the cursor for better FPS experience
+
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
+    glutKeyboardFunc(keyboard);
+    glutKeyboardUpFunc(keyboardUp); // Key release callback
+    glutMouseFunc(mouseClick); // Mouse click callback
+    glutMotionFunc(mouseMotion); // Mouse movement callback with left-click pressed
+    glutPassiveMotionFunc(mouseMotion); // Mouse movement callback without button pressed
+    glutIdleFunc(handleMovement); // Handle movement continuously
+
+    glutMainLoop();
+    return 0;
+}
