@@ -3,25 +3,25 @@
 ![Demo](Desktop%202025.06.02%20-%2011.39.43.02.DVR.gif)
 ![Demo](ROBOT.gif)
 
-# 🎯 Stationary Cannon Shooter Game
+# Stationary Cannon Shooter Game
 
 A 3D shooter game written in **C++** using **OpenGL**. You control a stationary cannon to defend against hostile robots in a walled arena. The game uses prebuilt **KVRC 3D models** and features basic FPS mechanics, textured rendering, and procedural animation.
 
 ---
 
-## 🛠 Features
+## Features
 
-- 🧱 Stationary cannon controlled with mouse and keyboard
-- 🎯 Projectile shooting with physics and collision
-- 🤖 Animated enemy robots with health and destruction
-- 🧠 Simple AI that moves robots toward the player
-- 💥 Cannon disables when hit, with recovery animation
-- 📦 Mesh importing of KVRC models (`mesh.obj`)
-- 🖼 Textured environment with ground, walls, and UI overlay
+- Stationary cannon controlled with mouse and keyboard
+- Projectile shooting with physics and collision
+- Animated enemy robots with health and destruction
+- Simple AI that moves robots toward the player
+- Cannon disables when hit, with recovery animation
+- Mesh importing of KVRC models (`mesh.obj`)
+- Textured environment with ground, walls, and UI overlay
 
 ---
 
-## 🎮 Controls
+## Controls
 
 | Key / Action        | Description                          |
 |---------------------|--------------------------------------|
